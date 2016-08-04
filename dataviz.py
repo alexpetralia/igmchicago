@@ -126,6 +126,7 @@ if __name__ == '__main__':
              (148, 103, 189), (197, 176, 213), (140, 86, 75), (196, 156, 148),  
              (227, 119, 194), (247, 182, 210), (127, 127, 127), (199, 199, 199),  
              (188, 189, 34), (219, 219, 141), (23, 190, 207), (158, 218, 229)]) / 255.
+    # color scheme from: http://www.randalolson.com/2014/06/28/how-to-make-beautiful-data-visualizations-in-python-with-matplotlib/
     facets['colors'], color_map = get_color_scheme(facets['institution'], colors)
     response_dist = df.groupby('economist_name').count().assign(
             pct = lambda df: (df['response'] / df['topic_name']) * 100
