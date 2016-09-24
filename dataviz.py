@@ -44,20 +44,6 @@ if __name__ == '__main__':
     }
     df = df.assign(response_int = lambda x: x['response'].map(certainty_mapping))
 
-    ############
-    # ANALYSIS #
-    ############
-    
-    facet_labels = ['economist_name', 'institution', 'sex']
-    facets = df.groupby(facet_labels).first().reset_index()[facet_labels]
-    
-    # Summary statistics
-    len(df.groupby('topic_name')) # 132 topics
-    len(df.groupby(['topic_name', 'survey_question'])) # 195 survey questions
-    len(facets['economist_name'].unique()) # 51 economists
-    facets.groupby('sex').size() # 11 female, 40 male
-    facets.groupby('institution').size().sort_values(ascending=False)
-    
     #################
     # VISUALIZATION #
     #################
