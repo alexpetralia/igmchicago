@@ -1,19 +1,15 @@
 # -*- coding: utf-8 -*-
 
 import os
-import requests
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import statsmodels.api as sm
-import dateutil.parser as dtutil
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.patches as mpatches
 import matplotlib
 from functools import partial
 from collections import OrderedDict
-from bs4 import BeautifulSoup
 
 if __name__ == '__main__':
 
