@@ -18,6 +18,8 @@ from bs4 import BeautifulSoup
 if __name__ == '__main__':
 
     df = pd.read_pickle(os.path.join(os.path.dirname(__file__), 'igmchicago.pkl'))
+    
+    assert False
 
     ##############
     # VALIDATION #
@@ -143,7 +145,7 @@ if __name__ == '__main__':
     comments.index.name = 'economist_name'
     comments['bins'] = pd.qcut(comments['avg_comment_length_chars'], 5)    
     comments['colors'], color_map = get_color_scheme(comments['bins'])
-    fancy_colored_bar_plot(comments.reset_index(), 'num_comments', color_map, 'economist', 'number of comments', 'Number of comments by economist (color = average comment length)', skip_bars=1) 
+    fancy_colored_bar_plot(comments.reset_index(), 'num_comments', color_map, 'economist', 'number of comments', 'Number of comments by economist (color = average comment length)', ylim=(0,160), skip_bars=1) 
 
     #/# Confidence vs. volatility #/#
     conf_stats = df[['economist_name', 'confidence']].groupby('economist_name').agg([np.mean, np.std]).sort_values([('confidence', 'mean')]) # sort MultiIndex via tuple
