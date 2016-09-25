@@ -42,7 +42,7 @@ if __name__ == '__main__':
             survey_questions = list('ABCD')[:len(soup.findAll('h3', {'class': 'surveyQuestion'}))]
             survey_date = soup.find('h6').get_text()
             tables = soup.findAll('table', {'class': 'responseDetail'})
-            for survey_question, table in dict(zip(survey_questions, tables)).items():
+            for survey_question, table in zip(survey_questions, tables):
                 rows = table.findAll('tr')#, {'class': 'parent-row'})
                 for row in rows:
                     if row.get('class') == ['parent-row']:
