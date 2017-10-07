@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import os
@@ -30,14 +31,14 @@ if __name__ == '__main__':
         topics = {}
         for poll in polls:
             topic = poll.find('h2').get_text()
-            handle = poll.find('h3', {'class': 'surveyQuestion'}).a['href']
+            handle = poll.find('a', {'class': 'surveyQuestion'})['href']
             topics[topic] = handle
         
         # Scrape detail pages
         data = []
         for topic, handle in topics.items():
             print(handle)
-            response = requests.get(domain + handle)
+            response = requests.get(handle)
             soup = BeautifulSoup(response.text, 'lxml')
             survey_questions = list('ABCD')[:len(soup.findAll('h3', {'class': 'surveyQuestion'}))]
             survey_date = soup.find('h6').get_text()
