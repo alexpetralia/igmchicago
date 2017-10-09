@@ -16,102 +16,113 @@ from functools import partial
 from collections import OrderedDict
 from bs4 import BeautifulSoup
 
+def qual2quant(resp):
+    return {'not confident at all': 0., 'not confident':1., 'confident': 2.,
+            'very confident': 3., 'extremely confident': 4.}[resp.lower()]
+
 if __name__ == '__main__':
 
     ############
     # SCRAPING #
     ############
     
-    if not os.path.exists('igmchicago.pkl'):
-    # Get detail page links
-        domain = 'http://www.igmchicago.org'
-        response = requests.get(domain + '/igm-economic-experts-panel')
-        soup = BeautifulSoup(response.text, 'lxml')
-        polls = soup.findAll('div', {'class': 'poll-listing'})
-        topics = {}
-        for poll in polls:
-            topic = poll.find('h2').get_text()
-            handle = poll.find('a', {'class': 'surveyQuestion'})['href']
-            topics[topic] = handle
-        
-        # Scrape detail pages
+    if not os.path.exists('cfmsurvey.pkl'):
         data = []
-        for topic, handle in topics.items():
-            print(handle)
-            response = requests.get(handle)
+
+        # Get detail page links
+        domain = 'http://cfmsurvey.org'
+        survey = '/surveys'
+        pages = ['', '/wages-and-economic-recoveries%27?page=1',
+                     '/wages-and-economic-recoveries%27?page=2',
+                     '/importance-elections-uk-economic-activity%22?page=3',
+                     '/importance-elections-uk-economic-activity%22?page=4',
+                     ]
+        for page in pages:
+            response = requests.get(domain + survey + page)
             soup = BeautifulSoup(response.text, 'lxml')
-            survey_questions = list('ABCD')[:len(soup.findAll('h3', {'class': 'surveyQuestion'}))]
-            survey_date = soup.find('h6').get_text()
-            tables = soup.findAll('table', {'class': 'responseDetail'})
-            for survey_question, table in zip(survey_questions, tables):
-                rows = table.findAll('tr')#, {'class': 'parent-row'})
-                for row in rows:
-                    if row.get('class') == ['parent-row']:
-                        cells = row.findAll('td')
-                        response = cells[2].get_text().strip()
-                        confidence = cells[3].get_text().strip()
-                        comment = cells[4].get_text().strip()
-                        tmp_data = {
-                            'survey_date': dtutil.parse(survey_date),
-                            'topic_name': topic,
-                            'topic_url': domain + handle,
-                            'survey_question': survey_question,
-                            'economist_name': cells[0].get_text().strip(),
-                            'economist_url':  domain + cells[0].a['href'],
-                            'economist_headshot': domain + cells[0].img['src'],
-                            'institution': cells[1].get_text().strip(),
-                            'response': response,
-                            'confidence': confidence,
-                            'comment': comment,
-                        }
-                        
-                        # If response, confidence and comment are all '---', this is a newly added economist
-                        # Update the dictionary with the next row's information
-                        if all([x == '---' for x in (response, confidence, comment)]):
-                            nextRow = row.nextSibling.nextSibling
-                            if nextRow.get('class') == ['tablesorter-childRow']:
-                                cells = nextRow.findAll('td')
-                                tmp_data.update({
-                                    'response': cells[1].get_text().strip(),
-                                    'confidence': cells[2].get_text().strip(),
-                                    'comment': cells[3].get_text().strip(),
-                                })
-                        
-                        data += [tmp_data]
+            polls = soup.findAll('article', {'class': 'views-row'})
+            topics = {}
+            for poll in polls:
+                h2 = poll.find('h2')
+                topic = h2.get_text() # This should be the text
+                handle = h2.a['href'] # This should be part of the URL
+                topics[topic] = handle
+            
+            # Scrape detail pages
+            for topic, handle in topics.items():
+                print(handle)
+                response = requests.get(domain+handle)
+                soup = BeautifulSoup(response.text, 'lxml')
+
+                # Get survey questions as A,B,C,...
+                q_soup = soup.find('div',
+                        {'class': 'field-name-field-questions'})
+                q_list = q_soup.findAll('article', {'class': 'node-question'})
+                survey_questions = range(1,1+len(q_list))
+
+                survey_date = soup.find('span',
+                        {'property': 'dc:date dc:created'}).get_text()
+
+                # Get expert responses
+                tables = soup.findAll('table', {'class': 'views-table'})
+                for survey_question, table in zip(survey_questions, tables):
+                    rows = table.findAll('tr')#, {'class': 'parent-row'})
+                    for row in rows:
+                        if row.get('class'): # Row contains expert
+                            cells = row.findAll('td')
+                            response = cells[1].get_text().strip()
+                            confidence = cells[2].get_text().strip()
+                            comment = cells[3].get_text().strip()
+                            try:
+                                headshot = cells[0].img['src'].split('?')[0]
+                            except TypeError:
+                                headshot = ''
+                            tmp_data = {
+                                'survey_date': dtutil.parse(survey_date),
+                                'topic_name': topic,
+                                'topic_url': domain + handle,
+                                'survey_question': survey_question,
+                                'economist_name': cells[0].get_text().strip().split('\n')[0],
+                                'economist_url':  domain + cells[0].a['href'],
+                                'economist_headshot': headshot,
+                                'institution': cells[0].get_text().strip().split('\n')[1],
+                                'response': response,
+                                'confidence': confidence,
+                                'comment': comment,
+                            }
+                            
+                            data += [tmp_data]
                 
         col_order = ['survey_date', 'topic_name', 'topic_url', 'survey_question', 'economist_name', 'economist_url', 'economist_headshot', 'institution', 'response', 'confidence', 'comment']
-        df = pd.DataFrame(data, columns=col_order) \
-               .assign(
-                   confidence = lambda x: x['confidence'] \
-                                .replace(r'[^\d]+|^$', np.nan, regex=True).astype(float),
-                )
-        df.to_pickle(os.path.join(os.path.dirname(__file__), 'igmchicago.pkl')) 
+        df = pd.DataFrame(data, columns=col_order)
+        df.confidence = df.confidence.apply(qual2quant)
+        df.to_pickle(os.path.join(os.path.dirname(__file__), 'cfmsurvey.pkl')) 
     else:
-        df = pd.read_pickle(os.path.join(os.path.dirname(__file__), 'igmchicago.pkl'))
+        df = pd.read_pickle(os.path.join(os.path.dirname(__file__), 'cfmsurvey.pkl'))
 
     ###########
     # STORAGE #
     ###########
         
-    import sqlalchemy
-    engine = sqlalchemy.create_engine('sqlite:///igmchicago.db')
-    df.to_sql('igmchicago', engine, index=False, if_exists='replace')
-    if os.path.exists('igmchicago.db'):
-        df = pd.read_sql_table('igmchicago', engine)
+    # import sqlalchemy
+    # engine = sqlalchemy.create_engine('sqlite:///cfmsurveys.db')
+    # df.to_sql('cfmsurveys.db', engine, index=False, if_exists='replace')
+    # if os.path.exists('cfmsurveys.db'):
+        # df = pd.read_sql_table('cfmsurveys.db', engine)
         
-    cnxn = engine.connect()
-    r = cnxn.execute("""
-		WITH igm AS (
-			SELECT economist_name, institution, AVG(confidence) AS avg_conf
-			FROM igmchicago
-			GROUP BY economist_name, institution
-		)
-		SELECT * FROM igm i
-		WHERE avg_conf >
-			(SELECT AVG(avg_conf) FROM igm g WHERE i.institution = g.institution)
-		ORDER BY institution, avg_conf
-    """)
-    r.fetchall()
+    # cnxn = engine.connect()
+    # r = cnxn.execute("""
+		# WITH igm AS (
+			# SELECT economist_name, institution, AVG(confidence) AS avg_conf
+			# FROM igmchicago
+			# GROUP BY economist_name, institution
+		# )
+		# SELECT * FROM igm i
+		# WHERE avg_conf >
+			# (SELECT AVG(avg_conf) FROM igm g WHERE i.institution = g.institution)
+		# ORDER BY institution, avg_conf
+    # """)
+    # r.fetchall()
 
     #######
     # EDA #
@@ -131,23 +142,23 @@ if __name__ == '__main__':
     ##############
     
     # Correct response types
-    df.loc[df['response'].str.contains(r'did not', case=False) | df['response'].str.contains(r'---'), 'response'] = np.nan
+    # df.loc[df['response'].str.contains(r'did not', case=False) | df['response'].str.contains(r'---'), 'response'] = np.nan
     
     # Convert empty string comments into null types
     df['comment'] = df['comment'].replace(r'^$', np.nan, regex=True)
 
     # Assign sex variable to economists
-    sex = pd.read_csv(os.path.join(os.path.dirname(__file__), 'economist_sex_mapping.csv'), index_col='economist_name')
-    df['sex'] = df['economist_name'].map(sex['sex'])
+    # sex = pd.read_csv(os.path.join(os.path.dirname(__file__), 'economist_sex_mapping.csv'), index_col='economist_name')
+    # df['sex'] = df['economist_name'].map(sex['sex'])
 
     # Assign response categories to numerical values    
     certainty_mapping = {
-        'Strongly Disagree': -2, 
+        'Strongly disagree': -2, 
         'Disagree': -1,
-        'Uncertain': 0,
+        'Neither agree nor disagree': 0,
         'No opinion': 0,
         'Agree': 1,
-        'Strongly Agree': 2,
+        'Strongly agree': 2,
     }
     df = df.assign(response_int = lambda x: x['response'].map(certainty_mapping))
 
@@ -155,14 +166,15 @@ if __name__ == '__main__':
     # ANALYSIS #
     ############
     
-    facet_labels = ['economist_name', 'institution', 'sex']
+    # facet_labels = ['economist_name', 'institution', 'sex']
+    facet_labels = ['economist_name', 'institution']
     facets = df.groupby(facet_labels).first().reset_index()[facet_labels]
     
     # Summary statistics
     len(df.groupby('topic_name')) # 132 topics
     len(df.groupby(['topic_name', 'survey_question'])) # 195 survey questions
     len(facets['economist_name'].unique()) # 51 economists
-    facets.groupby('sex').size() # 11 female, 40 male
+    # facets.groupby('sex').size() # 11 female, 40 male
     facets.groupby('institution').size().sort_values(ascending=False)
     
     #################
@@ -178,20 +190,20 @@ if __name__ == '__main__':
         plt.gcf().subplots_adjust(bottom=0.35)
            
         # Set bar colors
-        barlist = [x for x in ax.get_children() if isinstance(x, matplotlib.patches.Rectangle)]
-        for i, bar in enumerate(barlist[skip_bars:-1]):
-            bar.set_color(df.iloc[i+skip_bars]['colors'])
+        # barlist = [x for x in ax.get_children() if isinstance(x, matplotlib.patches.Rectangle)]
+        # for i, bar in enumerate(barlist[skip_bars:-1]):
+            # bar.set_color(df.iloc[i+skip_bars]['colors'])
             
         # Add a custom legend
         patches = []
         for group, color in color_map.items():
             patches += [mpatches.Patch(color=color, label=group)]
-        ax.legend(handles=patches, loc=legend_loc, shadow=True)
+        # ax.legend(handles=patches, loc=legend_loc, shadow=True)
         
         # Lighten background color
         if swap_bg:
             light_grey = np.array([250, 250, 245]) / 255.
-            barlist[-1].set_color(light_grey)
+            # barlist[-1].set_color(light_grey)
         
         # Rotate x-axis labels
         if rotate:
@@ -258,7 +270,7 @@ if __name__ == '__main__':
     scatter_plot(conf_stats, x='mean', y='std', xlab='mean confidence in response', ylab='standard deviation of confidence')
     
     #/# Saltwater vs. freshwater economics (last 30 surveys) #/#    
-    schools = df[df['institution'].str.contains('Harvard|Chicago')] \
+    schools = df[df['institution'].str.contains('London School of Economics|Oxford')] \
         .groupby(['survey_date', 'topic_name', 'survey_question', 'institution']) \
         .mean()['response_int'] \
         .unstack() \
